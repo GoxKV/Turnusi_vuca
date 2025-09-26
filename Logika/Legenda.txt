@@ -1,0 +1,113 @@
+
+kada se klikne na dugme "Prikazi prosireni turnus" aktivria se u formi "Graficki prikaz turnusa" turnus koji je naveden u text boxu ali na sledeci nacin:
+linija [0] i linije [3] i [5] se menjaju i nastaju linija [0A], [3A], [5A], [0B], [3B] i [5b]
+
+njihov izgled treba da bude sledeci:
+
+
+
+[0A]____________...
+
+razmak kao kod linija [0] i [3]
+
+[3A]____________...
+
+razmak kao kod linija [3] i [5]
+
+[5A]____________...
+
+razmak kao kod linija [0] i [3]
+
+[0B]____________...
+
+razmak kao kod linija [0] i [3]
+
+[3B]____________...
+
+razmak kao kod linija [3] i [5]
+
+[5B]____________...
+
+ovo ce izgledati prosireni turnus za pregled. vertikalni podeoci koji se nalaze na linijama [0] [3] i [5] pa njihov razmak se duplira i oznake na liniji [0A] pocinju od sata 00 i zavrsavaju se sa satom (oznakom) 12 (razmak izmedju vertikalnih oznakama na linijama [3A] i [5A] se isto za duplo prosiruju.
+
+zatim na liniji [0B] vertikalni razmaci su isti kao i na liniji [0A] sa razlikom sto oznake na liniji [0B] pocinju sa oznakom 12 a zavrsavaju sa oznakom 24.  
+
+sta hocu da postignem sa ovim.
+Posto postoje turnusi vozova koji za kratko vreme odrade dosta vozova u jednom turnusu pregled takvih vozova na papiru formata A4 jr gotovo nemoguc. ideja je da se ti turnusi RAZVUKU u dva reda i da prikaz tog turnusa bude isti kao i kod obicnog turnusa samo podeljen u dva reda. ja imam neke ideje kako to da uradim ali bi voleo da ti das neki predlog za to. da li je ovo izvodljivo?
+
+
+
+objasnjenje za prelazni voz
+najbolje resenje ovoga problema moze biti sledeca:
+odrade se normalne provere za vozove kao do sada.
+ukoliko je sve ok, onda se prelazi na jos jednu proveeru:
+
+dodata provera koja proverava da li u turnusu postoji prelazni voz.
+ukoliko ne postoji onda se nastavlja dalje sa izvrsenjem koda. ali ako postoji prelazni voz uraditi sledecu proveru:
+
+Primer:
+podaci za vozove iz taba "Vozovi"
+br.voz  poc.ST  krajST  Polaza  Dolaza  Serija  Status  Sekcij
+3333    KV        PO       22:50   01:20     413     R         KV
+4444    PO        KV       01:01   02:02     413     R         KV
+
+
+provera da li je prelazni voz prvi u nizu ili je zadnji:
+ukoliko je prvi u nizu ne proverava se nista jer je vec provereno predhodnim proverama.
+
+u slucaju da je prelazni voz zadnji u nizu
+
+prelazni voz je zadnji u nizu:
+4444, xxxx, yyyy, zzzz, qqqq, 3333
+
+proverava se da li je vrame dolaska voza 3333 <= od vremena polaska voza 4444, odnosno da li je vreme dolaska poslednjeg voza u nizu vece od vremena polaska prvog voza u nizu i ako je to true izbacuje gresku.
+
+saljem ti zadovoljavajucu funkciju "def proveri_turnus(self):" koju treba da prepravis sa ovim mojim predlogom.
+
+
+
+
+grafik:
+
+pozicije sve se gleda od gornjeg levog ugla papira A4 orjentacije landscape. margine su gore 10mm, levo 20mm, desno 30mm
+Obavezan text koji mora da se pojavi na grafiku a rucuna se centar teksta horizontalno:
+	
+	I red y=10mm algin text left: trenutni datum stampe u formatu "dd.mm.yy."
+	I red y=10mm algin text right: "str. " + 1 a ukoliko ima vise strana svaka sledeca se uvecava za 1, tako da bude za prvu stranu str. 1, za drugu stranu u stampi str. 2 itd
+	I red algin text centar: "OBRADA TURNUSA"
+izgled prvog reda od ivice lista:
+leva ivica lista|<10mm>|dd.mm.yy|<     centar text "OBRADA TURNUSA"     >|str. 1|<30mm>|desna ivica lista
+     
+
+
+	II red y=15mm algin text central:
+
+	III red y=35mm
+
+koliko je razlicitih turnusa u prikazu od 1 do nn. jer "Broj vozila u turnusu" odredjuje koliko turnusa ima
+
+
+
+
+
+predlazem sledecu proveru:
+1. da li u turnusu ima prelazni voz
+2. ako nema radi proveru po starom sistemu
+3. ako ima prelazni voz onda za njega proverava njegov polazak da li je veci od najveceg dolaska vozova u tom turnusu i proverava da li je njegov dolazak manji od najmanjeg polaska ostalih vozova u turnusu.
+
+mislim da je ovo mozda najbolje resenje, sta ti mislis da li mozemo to na ovaj nacin da uradimo? 
+
+
+
+opet ne radi kako smo zamislili.
+ponovo primer da imamo dva voza:
+
+br.voz  poc.ST  krajST  Polaza  Dolaza  Serija  Status  Sekcij
+3333    KV        PO       22:50   01:20     413     R         KV
+4444    PO        KV       01:01   02:02     413     R         KV
+
+i sada kada se unese redosled voova 3333, 4444 aplikacija daje "Greske u redosledu/preklapanju: Voz 3333 i 4444: Dolazak 01:20 >= Polazak 01:01 (poklapanje vremena y turnusu) i to je dobro.
+
+medjutim kada se unese redosled 4444, 3333 i kada se ide na proveru turnusa aplikacija dozvoljava prolazak ovakvog rasporeda vozova. 
+izmedju ova dva voza moze da se nalazi jos 10 vozova koji se uklapaju kao treba. 
+sada je najbitnije da problem koji moze da nastane zbog nacina unosa od starane korisnika a to
