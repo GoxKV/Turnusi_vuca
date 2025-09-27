@@ -1962,15 +1962,15 @@ class SimpleApp(QWidget):
                 y_trenutni += visina_turnusa
                 vozovi_u_turnusu = []
             trenutni_turnus_id = turnus_id
+            # Transformiši podatke iz baze u format koji očekuje _crtaj_jedan_turnus
             vozovi_u_turnusu.append({
                 'broj': broj_voza,
                 'pocetna': pocetna,
                 'krajnja': krajnja,
-                'sat_p': sat_p,
-                'min_p': min_p,
-                'sat_d': sat_d,
-                'min_d': min_d,
-                'status': status
+                'polazak': (sat_p, min_p),  # <-- PROMENJENO: kombinuj sat i minut u tuple
+                'dolazak': (sat_d, min_d),  # <-- PROMENJENO: kombinuj sat i minut u tuple
+                'status': status,
+                'serija_vozila': "N/A"  # <-- DODATO: ako nemaš seriju_vozila u podacima iz baze, koristi "N/A"
             })
         if vozovi_u_turnusu:
             self._crtaj_jedan_turnus(vozovi_u_turnusu, y_trenutni, sirina_sata, visina_turnusa)
@@ -1983,29 +1983,61 @@ class SimpleApp(QWidget):
 
     def _crtaj_jedan_turnus(self, vozovi, y, sirina_sata, visina_turnusa):
         """Pomoćna funkcija za crtanje jednog turnusa u grafiku."""
+        if not vozovi:
+            return
+
+        # --- IZRACUNAVANJE Y KOORDINATA ZA NOVI RASPORED ---
+        # Visina svakog reda unutar turnusa
+        visina_reda = 20 # px (≈ 5mm)
+        
+        # y koordinate elemenata unutar turnusa
         gornja_linija_y = y + 30
-        donja_linija_y = gornja_linija_y + 20  # Razmak ~20px ≈ 5mm
+        donja_linija_y = gornja_linija_y + 20 # Razmak ~20px ≈ 5mm
         tekst_gore_y = gornja_linija_y - 25
         tekst_dole_y = donja_linija_y + 10
         broj_vozila_x = 10
-        broj_vozila_y = gornja_linija_y - 5
-        # Broj vucnog vozila (1)
-        self.scene.addText("1").setPos(broj_vozila_x, broj_vozila_y)
-        # Gornja i donja linija puta turnusa - CRTAJ DO 24h (ne do 25h)
-        # self.scene.addLine(0, gornja_linija_y, 25 * sirina_sata, gornja_linija_y, QPen(Qt.GlobalColor.black, 1.2)) # <-- OVA LINIJA SE MENJA
-        # self.scene.addLine(0, donja_linija_y, 25 * sirina_sata, donja_linija_y, QPen(Qt.GlobalColor.black, 1.2)) # <-- OVA LINIJA SE MENJA
+        broj_vozila_y = gornja_linija_y - 5 # Vertikalno centriran sa putem voza
+
+        # --- CRTANJE ELEMENTA TURNUSA ---
+        
+        # 1. Broj vučnog vozila (1) - levo od svih linija, boldiran, centriran sa putem voza
+        text_broj_vozila = self.scene.addText("1")
+        font_broj_vozila = QFont()
+        font_broj_vozila.setBold(True)
+        text_broj_vozila.setFont(font_broj_vozila)
+        # Postavi na y tako da bude centriran sa putem voza (gornja_linija_y + visina_reda/2)
+        # Ako je gornja_linija_y = y + 30, a visina_reda = 20, centar je na y + 40
+        # Tekst se crta od svog gornjeg levog ugla, pa moramo da podesimo y
+        # Pretpostavimo da je visina teksta oko 15px
+        visina_teksta_broja = text_broj_vozila.boundingRect().height()
+        y_centar_puta = gornja_linija_y + visina_reda / 2
+        y_tekst_broj_vozila = y_centar_puta - visina_teksta_broja / 2
+        text_broj_vozila.setPos(broj_vozila_x, y_tekst_broj_vozila)
+
+        # 2. Glavne horizontalne linije puta turnusa - ograničene na 24 sata (1440px)
         self.scene.addLine(0, gornja_linija_y, 24 * sirina_sata, gornja_linija_y, QPen(Qt.GlobalColor.black, 1.2))
         self.scene.addLine(0, donja_linija_y, 24 * sirina_sata, donja_linija_y, QPen(Qt.GlobalColor.black, 1.2))
-        # Dodaj kratke vertikalne podelice na [3] i [5] za sve sate (0-24)
-        # ALI NE I ZA POSLEDNJU POZICIJU (24h) - NE, CRTAJ I ZA 24h KAO ŠTO SI ZADNJOM PRIMEDBOM OBJASNIO
-        for h in range(25):  # <-- OVA LINIJA OSTAJE: range(25) za 0-24
-            x = h * sirina_sata
-            # Na [3]: 6px (3mm) ukupno, centrirano
+        
+        # 3. Vertikalne podelice na glavnim linijama puta - na svakih sat vremena (0-24)
+        # Crtamo za sat 0, 1, ..., 24 (uključujući 24 za krajnju podelu)
+        for sat in range(25): # 0 do 24
+            x = sat * sirina_sata
+            # Kratka vertikalna podelica: dužina ~9px (≈3mm) na gornjoj liniji [3A/B] i [5A/B]
             self.scene.addLine(x, gornja_linija_y - 3, x, gornja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
-            # Na [5]: isto
+            # Kratka vertikalna podelica: dužina ~9px (≈3mm) na donjoj liniji [3A/B] i [5A/B]
             self.scene.addLine(x, donja_linija_y - 3, x, donja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
-        # ... (ostatak funkcije ostaje isti, ali sada zna da je max x = 24*sirina_sata)
-        # Stilovi linija
+            
+            # Broj sata iznad gornje linije [0A/B]
+            # sat_tekst = f"{sat % 24:02d}"  # ← OVO SE MENJA
+            sat_tekst = f"{sat:02d}" # ← NOVA LINIJA: prikazuje 00, 01, ..., 23, 24
+            text = self.scene.addText(sat_tekst)
+            font_sat = QFont("Arial", 8)
+            # text.setFont(font_sat) # Postavi font
+            # Centriraj tekst iznad podelice
+            rect_sat = text.boundingRect()
+            text.setPos(x - rect_sat.width() / 2, -30) # Ispod glavne vremenske ose (na y=0)
+
+        # --- STILOVI LINIJA VOZNJI ---
         pen = QPen(Qt.GlobalColor.black, 2)
         style_map = {
             'R': Qt.PenStyle.SolidLine,
@@ -2014,98 +2046,137 @@ class SimpleApp(QWidget):
             'S': Qt.PenStyle.DashDotLine,
             'V': Qt.PenStyle.DashDotDotLine
         }
+
+        # --- CRTANJE SVAKOG VOZA U TURNUSU ---
         for i, voz in enumerate(vozovi):
-            # Računanje x koordinata za polazak i dolazak
-            x_p = (voz['sat_p'] * 60 + voz['min_p']) / 60 * sirina_sata
-            x_d = (voz['sat_d'] * 60 + voz['min_d']) / 60 * sirina_sata
+            # a) Izračunaj x koordinate za polazak i dolazak u odnosu na ceo dan (0-24)
+            # Pretvori vreme u minute od ponoći (00:00)
+            sat_p, min_p = voz["polazak"]
+            sat_d, min_d = voz["dolazak"]
+            minuti_p = sat_p * 60 + min_p
+            minuti_d = sat_d * 60 + min_d
 
-            # Provera da li je prelazna vožnja
-            # Prelazna vožnja: sat_dolaska < sat_polaska, ili sat_dolaska == sat_polaska i min_dolaska < min_polaska
-            # (Ako su sati i minuti isti, nije prelazna, ali to je edge case)
-            # Sledeći uslov detektuje prelaz: sat_d < sat_p ili (sat_d == sat_p i min_d < min_p)
-            # Ako sat_d > sat_p, nije prelazna.
-            # Ako sat_d == sat_p, onda zavisi od minuta.
-            # Dakle, prelazna ako: (sat_d < sat_p) ili (sat_d == sat_p i min_d < min_p)
-            # Alternativno, ako pretvorimo u minute od 00:00, prelazna je ako je dolazak_m < polazak_m
-            # minute_polazak = voz['sat_p'] * 60 + voz['min_p']
-            # minute_dolazak = voz['sat_d'] * 60 + voz['min_d']
-            # prelazna = minute_dolazak < minute_polazak
-            # Ali može i ovako:
-            prelazna = (voz['sat_d'] < voz['sat_p']) or (voz['sat_d'] == voz['sat_p'] and voz['min_d'] < voz['min_p'])
+            # b) Linija vožnje - ograničena na zadati opseg (0-24 sati)
+            # x koordinate u pikselima
+            x_p = (minuti_p / 60.0) * sirina_sata
+            x_d = (minuti_d / 60.0) * sirina_sata
+            linija_y = gornja_linija_y + 10 # Linija vožnje u sredini
 
-            if prelazna:
-                # Crtanje dva segmenta za prelaznu vožnju
-                # Prvi segment: od polaska do kraja dana (24:00 = 25*sirina_sata)
-                linija_y = gornja_linija_y + 10
-                pen.setStyle(style_map.get(voz['status'], Qt.PenStyle.SolidLine))
-                self.scene.addLine(x_p, linija_y, 24 * sirina_sata, linija_y,
-                                   pen)  # CRTAJ DO OZNAKE 24, NE DO KRAJA SCENE
-                # self.scene.addLine(x_p, linija_y, 25 * sirina_sata, linija_y, pen) # Do kraja scene
+            # Proveri da li je voz prelazni (dolazak raniji od polaska u 24h ciklusu)
+            # Prelazni: sat_d < sat_p ILI (sat_d == sat_p i min_d < min_p)
+            # Ali ovo može da bude zbunjujuće. Bolje je reći:
+            # Ako je minuti_d < minuti_p, onda je voz prelazni (dolazi sledećeg dana).
+            # Ali ako voz polazi u 23:00 i stiže u 02:15, to znači da minuti_p=1380, minuti_d=135.
+            # minuti_d (135) < minuti_p (1380) -> TRUE -> Prelazni.
+            # Ako voz polazi u 11:00 i stiže u 13:15, to znači minuti_p=660, minuti_d=795.
+            # minuti_d (795) < minuti_p (660) -> FALSE -> Nije prelazni.
+            # Ovo je tačno.
+            prelazni = minuti_d < minuti_p
 
-                # Drugi segment: od početka dana (00:00 = 0) do dolaska
-                self.scene.addLine(0, linija_y, x_d, linija_y, pen)  # Od početka scene
-
-                # Broj voza (podeljen između dva segmenta, možda centriran u "sredini prelaza")
-                # Centralna tačka je 24h (ili 25*sirina_sata - ali logički je 24h)
-                # Podelimo rastojanje između polaska i dolaska preko 24h granice
-                # x_sredina = (x_p + 25*sirina_sata + 0 + x_d) / 2 NE, to ne daje dobar centar
-                # Bolje je da nacrtamo tekst na oba mesta
-                # Tekst na prvom segmentu (desnoj strani)
-                text_broj_prvi = self.scene.addText(voz['broj'])
-                text_broj_prvi.setPos((x_p + 25 * sirina_sata) / 2 - 20, tekst_gore_y)  # Približno centriran
-
-                # Tekst na drugom segmentu (levoj strani)
-                text_broj_drugi = self.scene.addText(voz['broj'])
-                text_broj_drugi.setPos((0 + x_d) / 2 - 20, tekst_gore_y)  # Približno centriran
-
-                # Minuti (na mestima polaska i dolaska)
-                # Minut polaska (desna strana - pored x_p)
-                text_min_p = self.scene.addText(f"{voz['min_p']:02}")
-                text_min_p.setPos(x_p - 10, tekst_dole_y)
-                # Minut dolaska (leva strana - pored x_d)
-                text_min_d = self.scene.addText(f"{voz['min_d']:02}")
-                text_min_d.setPos(x_d - 10, tekst_dole_y)
-
+            # c) Ako je prelazni, dodaj 24h (1440 minuta) na vreme dolaska za proračune
+            if prelazni:
+                minuti_d_korigovano = minuti_d + 24 * 60
             else:
-                # Crtanje jednog segmenta za običnu vožnju
-                linija_y = gornja_linija_y + 10
-                pen.setStyle(style_map.get(voz['status'], Qt.PenStyle.SolidLine))
-                self.scene.addLine(x_p, linija_y, x_d, linija_y, pen)
+                minuti_d_korigovano = minuti_d
 
-                # Broj voza (centrirano između x_p i x_d)
-                text_broj = self.scene.addText(voz['broj'])
-                text_broj.setPos((x_p + x_d) / 2 - 20, tekst_gore_y)
+            # d) Postavi stil linije
+            pen.setStyle(style_map.get(voz['status'], Qt.PenStyle.SolidLine))
+            
+            # e) Nacrtaj liniju vožnje (samo deo unutar opsega 0-24)
+            # Provera da li linija ima presek sa opsegom 0-24 (0 - 1440 minuta)
+            opseg_x_pocetak = 0
+            opseg_x_kraj = 24 * sirina_sata
+            if not (x_p > opseg_x_kraj or x_d < opseg_x_pocetak): # Standardna provera preseka intervala
+                 # Postoji presek, crtamo deo linije koji pripada opsegu
+                 clipped_x1 = max(x_p, opseg_x_pocetak)
+                 clipped_x2 = min(x_d, opseg_x_kraj)
+                 self.scene.addLine(clipped_x1, linija_y, clipped_x2, linija_y, pen)
 
-                # Minuti (pored x_p i x_d)
-                text_min_p = self.scene.addText(f"{voz['min_p']:02}")
-                text_min_p.setPos(x_p - 10, tekst_dole_y)
-                text_min_d = self.scene.addText(f"{voz['min_d']:02}")
-                text_min_d.setPos(x_d - 10, tekst_dole_y)
+            # f) Broj voza (centrirano između x_p i x_d unutar opsega, boldiran)
+            if not (x_p > opseg_x_kraj or x_d < opseg_x_pocetak):
+                 clipped_x1 = max(x_p, opseg_x_pocetak)
+                 clipped_x2 = min(x_d, opseg_x_kraj)
+                 text_broj = self.scene.addText(voz['broj'])
+                 font_broj = QFont()
+                 font_broj.setBold(True) # Boldiran
+                 text_broj.setFont(font_broj)
+                 # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                 text_broj.setPos((clipped_x1 + clipped_x2) / 2 - 20, tekst_gore_y - 10)
 
-            # Stanice (samo za prvi i poslednji voz u turnusu)
-            if i == 0:  # Prvi voz
-                text_pocetna = self.scene.addText(voz['pocetna'])
-                text_pocetna.setPos(x_p - 20, tekst_gore_y - 15)
-            if i == len(vozovi) - 1:  # Poslednji voz
-                text_krajnja = self.scene.addText(voz['krajnja'])
-                text_krajnja.setPos(x_d - 20, tekst_gore_y - 15)
-            else:  # Srednji vozi (stanica dolaska trenutnog = stanica polaska sledećeg)
-                if i < len(vozovi) - 1:
-                    sledeci = vozovi[i + 1]
-                    # x_sledeci_p = (sledeci['sat_p'] * 60 + sledeci['min_p']) / 60 * sirina_sata # Ovo je isto kao x_d trenutnog voza?
-                    # Ne, to je sledeći voz. Znači, stanica se piše između trenutnog i sledećeg.
-                    # Dakle, između x_d trenutnog i x_p sledećeg. Ako su isti, nacrtaj na x_d.
-                    x_d_trenutni = x_d
-                    x_p_sledeci = (sledeci['sat_p'] * 60 + sledeci['min_p']) / 60 * sirina_sata
-                    x_sredina = (x_d_trenutni + x_p_sledeci) / 2
-                    text_srednja = self.scene.addText(voz['krajnja'])
-                    text_srednja.setPos(x_sredina - 20, tekst_gore_y - 15)
-                    # U slučaju prelazne vožnje, ovo može biti konfuzno. Ako je sledeći voz običan i počinje rano,
-                    # npr. trenutni 23:45 -> 00:15 (prelaz), sledeći 00:30 -> 05:00.
-                    # x_d_trenutnog (00:15) je mali broj, x_p_sledećeg (00:30) je mali broj.
-                    # x_sredina je tada između 00:15 i 00:30, što je ispravno na levoj strani.
-                    # Ako je sledeći voz takodje prelazni, npr. 00:30 -> 01:15, opet je x_p_sledećeg mali broj.
-                    # Dakle, logika ostaje ista.
+            # g) Minuti (pored x_p i x_d, ali samo ako su unutar opsega)
+            # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+            if opseg_x_pocetak <= x_p <= opseg_x_kraj:
+                 text_min_p = self.scene.addText(f"{min_p:02d}") # minuti
+                 # text_min_p.setFont(QFont()) # Normalan font
+                 # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                 text_min_p.setPos(x_p - 10, tekst_dole_y - 10)
+            if opseg_x_pocetak <= x_d <= opseg_x_kraj:
+                 text_min_d = self.scene.addText(f"{min_d:02d}") # minuti
+                 # text_min_d.setFont(QFont()) # Normalan font
+                 # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                 text_min_d.setPos(x_d - 10, tekst_dole_y - 10)
+
+            # h) Stanice - crtaj samo jednom za ceo turnus, po novoj logici
+            # Prema novoj logici:
+            # - SAMO za PRVI voz u turnusu: crtaj i pocetna i krajnja stanica
+            # - Za SVE OSTALE vozove: crtaj SAMO krajnja stanica (jer je to pocetna stanica sledeceg)
+            # - Prelazni voz na kraju: crtaj SAMO krajnja stanica (jer je to pocetna stanica sledeceg dana)
+            # - Specijalan slučaj: ako voz dolazi u 23:00 i polazi u 02:15 (prelazni sledećeg dana), njegova krajnja stanica
+            #   se crta samo jednom (na kraju prvog segmenta), a ne i na početku drugog segmenta.
+            
+            # Da bismo ovo postigli, moramo da prođemo kroz sve vozove i odredimo tačne pozicije za crtanje stanica.
+            # Ovo je najlakše uraditi u zasebnoj petlji posle crtanja svih linija vožnji.
+            # Za sada, ostavićemo crtanje stanica za sledeći korak.
+
+        # --- CRTANJE STANICA PO NOVOJ LOGICI ---
+        # Prođi kroz sve vozove i nacrtaj stanice samo jednom, po novoj logici
+        for i, voz in enumerate(vozovi):
+             sat_p, min_p = voz["polazak"]
+             sat_d, min_d = voz["dolazak"]
+             minuti_p = sat_p * 60 + min_p
+             minuti_d = sat_d * 60 + min_d
+             prelazni = minuti_d < minuti_p
+             if prelazni:
+                 minuti_d_korigovano = minuti_d + 24 * 60
+             else:
+                 minuti_d_korigovano = minuti_d
+
+             # x koordinate u pikselima
+             x_p = (minuti_p / 60.0) * sirina_sata
+             x_d = (minuti_d / 60.0) * sirina_sata
+             # Za prelazne, x_d je u narednom danu, pa treba korigovati
+             if prelazni:
+                 x_d = (minuti_d_korigovano / 60.0) * sirina_sata
+
+             opseg_x_pocetak = 0
+             opseg_x_kraj = 24 * sirina_sata
+
+             # Po novoj logici:
+             if i == 0: # Prvi voz u turnusu
+                 # Crtaj i pocetna i krajnja stanica
+                 if opseg_x_pocetak <= x_p <= opseg_x_kraj:
+                      text_pocetna = self.scene.addText(voz['pocetna'])
+                      font_stanica = QFont()
+                      # font_stanica.setBold(True) # NE BOLDIRATI
+                      text_pocetna.setFont(font_stanica)
+                      # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                      text_pocetna.setPos(x_p - 20, tekst_gore_y - 15 - 10)
+                 if opseg_x_pocetak <= x_d <= opseg_x_kraj:
+                      text_krajnja = self.scene.addText(voz['krajnja'])
+                      font_stanica = QFont()
+                      # font_stanica.setBold(True) # NE BOLDIRATI
+                      text_krajnja.setFont(font_stanica)
+                      # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                      text_krajnja.setPos(x_d - 20, tekst_gore_y - 15 - 10)
+             else: # Svi ostali vozovi (uključujući prelazni na kraju)
+                 # Crtaj SAMO krajnja stanica (jer je to pocetna stanica sledeceg)
+                 if opseg_x_pocetak <= x_d <= opseg_x_kraj:
+                      text_krajnja = self.scene.addText(voz['krajnja'])
+                      font_stanica = QFont()
+                      # font_stanica.setBold(True) # NE BOLDIRATI
+                      text_krajnja.setFont(font_stanica)
+                      # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                      text_krajnja.setPos(x_d - 20, tekst_gore_y - 15 - 10)
 
     def snimi_godinu_za_grafik(self):
         """Čuva trenutno unetu godinu u atribut i fajl."""
@@ -2138,7 +2209,7 @@ class SimpleApp(QWidget):
             print(f"Greška pri učitavanju godine za grafik: {e}")
 
     def prikazi_prosireni_turnus(self):
-        """Prikazuje 'prosireni' turnus u dva reda sa dupliranim razmakom sati."""
+        """Prikazuje 'prosireni' turnus u dva reda na osnovu vremena polaska."""
         naziv_turnusa = self.naziv_prosirenog_input.text().strip()
 
         if not naziv_turnusa:
@@ -2167,7 +2238,7 @@ class SimpleApp(QWidget):
             WHERE tv.turnus_id = ?
             ORDER BY tv.redosled
         """, (turnus_id,))
-
+        
         vozovi_raw = cursor.fetchall()
         conn.close()
 
@@ -2178,107 +2249,105 @@ class SimpleApp(QWidget):
         # 3. Transformiši podatke u listu rečnika (kao u _crtaj_jedan_turnus)
         vozovi_full_info = []
         for v in vozovi_raw:
-            vozovi_full_info.append({
-                "broj": v[0], "pocetna": v[1], "krajnja": v[2],
-                "polazak": (v[3], v[4]), "dolazak": (v[5], v[6]),
-                "status": v[7], "serija_vozila": v[8] or "N/A"
-            })
+             vozovi_full_info.append({
+                 "broj": v[0], "pocetna": v[1], "krajnja": v[2],
+                 "polazak": (v[3], v[4]), "dolazak": (v[5], v[6]),
+                 "status": v[7], "serija_vozila": v[8] or "N/A"
+             })
 
-        # 4. Pripremi scenu za crtanje (KORISTI self.scene IZ GRAFIKA)
+        # 4. Podeli vozove na dva dela: pre 12:00 i od 12:00
+        deo1_pre_podne = []
+        deo2_posle_podne = []
+        for voz in vozovi_full_info:
+            sat_p = voz["polazak"][0]
+            if sat_p < 12:
+                deo1_pre_podne.append(voz)
+            else: # sat_p >= 12
+                deo2_posle_podne.append(voz)
+
+        # 5. Pripremi scenu za crtanje (KORISTI self.scene IZ GRAFIKA)
+        # Proveri da li self.scene i self.view postoje (iz create_tab_grafik)
         if not hasattr(self, 'scene') or not hasattr(self, 'view'):
-            QMessageBox.critical(self, "Greška", "Scena za grafik nije inicijalizovana.")
-            return
+             QMessageBox.critical(self, "Greška", "Scena za grafik nije inicijalizovana.")
+             return
 
         self.scene.clear()
 
-        # 5. Parametri za crtanje
-        # ORIGINALNA sirina_sata = 60px za 24h (1440px ukupno)
-        # Nova logika: 12 sati se prikazuju u 1440px (kao ranije 24h)
-        # Dakle, nova sirina sata za prikaz (duplirana) = 1440px / 12h = 120px
-        originalna_sirina_sata = 60  # 60px po satu kao ranije
-        sirina_sata_dupla = 2 * originalna_sirina_sata  # 120px po satu za prikaz
-        # Visina svakog reda ostaje ista
+        # 6. Parametri za crtanje (možeš ih prilagoditi)
+        sirina_sata = 60
         visina_reda = 120
-        # Vertikalni razmak između redova
-        razmak_izmedju_redova = 30  # px
-
-        # 6. Nacrtaj ceo prošireni turnus (oba reda)
-        # Prosledjujemo CELU listu vozova. Funkcija ce ih podeliti interni.
         y_pocetak = 50
-        self._crtaj_jedan_turnus_prosireni(vozovi_full_info, y_pocetak, sirina_sata_dupla, visina_reda,
-                                           razmak_izmedju_redova)
+        razmak_izmedju_redova = 30 # Vertikalni razmak između dva reda turnusa
 
-        # 7. Postavi veličinu scene (procenjeno)
-        # Visina: pocetak + 2*visina_reda + razmak + margina
-        max_y = y_pocetak + 2 * visina_reda + razmak_izmedju_redova + 100
-        # Sirina: 12 sati * dupla sirina = 1440px (fiksno za prikaz)
-        self.scene.setSceneRect(0, 0, 12 * sirina_sata_dupla, max_y)
+        # 7. Nacrtaj prvi deo (00-12 sati)
+        if deo1_pre_podne:
+            y_deo1 = y_pocetak
+            self._crtaj_jedan_turnus_prosireni(deo1_pre_podne, y_deo1, sirina_sata, visina_reda, 0, 12)
 
-        # 8. Prebaci fokus na tab "Pregled Grafika"
+        # 8. Nacrtaj drugi deo (12-24 sati)
+        if deo2_posle_podne:
+            # y koordinata za drugi deo
+            # Ako postoji prvi deo, crtamo ispod njega + razmak. Ako ne, crtamo od y_pocetak
+            y_deo2 = y_pocetak + (visina_reda if deo1_pre_podne else 0) + (razmak_izmedju_redova if (deo1_pre_podne and deo2_posle_podne) else 0)
+            self._crtaj_jedan_turnus_prosireni(deo2_posle_podne, y_deo2, sirina_sata, visina_reda, 12, 24)
+
+        # 9. Postavi veličinu scene (pojednostavljeno)
+        max_y = y_pocetak + (visina_reda if deo1_pre_podne else 0) + (razmak_izmedju_redova if (deo1_pre_podne and deo2_posle_podne) else 0) + (visina_reda if deo2_posle_podne else 0) + 50
+        self.scene.setSceneRect(0, 0, 24 * sirina_sata, max_y)
+
+        # 10. Prebaci fokus na tab "Pregled Grafika"
+        # Pretpostavljamo da je self.tabs instanca QTabWidget i da je:
+        # 0 - Vozovi, 1 - Turnusi, 2 - Grafik, 3 - Stampa
         if hasattr(self, 'tabs'):
-            self.tabs.setCurrentIndex(2)  # Indeks taba "Grafik"
+             self.tabs.setCurrentIndex(2) # Indeks taba "Grafik"
 
         QMessageBox.information(self, "Uspeh", f"Prošireni prikaz turnusa '{naziv_turnusa}' je generisan.")
 
-    def _crtaj_jedan_turnus_prosireni(self, vozovi, y_pocetak, sirina_sata_dupla, visina_reda, razmak_izmedju_redova):
+    def _crtaj_jedan_turnus_prosireni(self, vozovi, y, sirina_sata, visina_turnusa, pocetni_sat, krajnji_sat):
         """
-        Pomoćna funkcija za crtanje 'prosirenog' turnusa u dva reda sa dupliranim razmakom sati.
-        Crtaju se dve linije: jedna za vozove 00-12h (gornji red) i jedna za 12-24h (donji red).
+        Pomoćna funkcija za crtanje jednog 'reda' turnusa sa prilagođenom vremenskom osom.
+        Slična _crtaj_jedan_turnus, ali sa ograničenom vremenskom osom.
         """
         if not vozovi:
             return
 
-        # --- PODELI VOZOVE NA DVA REDA ---
-        vozovi_pre_podne = [voz for voz in vozovi if voz["polazak"][0] < 12]
-        vozovi_posle_podne = [voz for voz in vozovi if voz["polazak"][0] >= 12]
+        gornja_linija_y = y + 30
+        donja_linija_y = gornja_linija_y + 20 # Razmak ~20px ≈ 5mm
+        tekst_gore_y = gornja_linija_y - 25
+        tekst_dole_y = donja_linija_y + 10
+        broj_vozila_x = 10
+        broj_vozila_y = gornja_linija_y - 5
 
-        # --- PARAMETRI ZA CRTANJE ---
-        # Visina za gornji i donji red
-        y_gornji = y_pocetak
-        y_donji = y_pocetak + visina_reda + razmak_izmedju_redova
+        # 1. Broj vučnog vozila (1) - levo od svih linija
+        self.scene.addText("1").setPos(broj_vozila_x, broj_vozila_y)
 
-        # Pomocna funkcija za crtanje jednog reda (linije)
-        def _crtaj_red_linije(y_base, oznaka):
-            gornja_linija_y = y_base + 30
-            donja_linija_y = gornja_linija_y + 20
-            # Linije puta turnusa (horizontalne)
-            # Dužina je 12 sati * dupla širina = 1440px
-            self.scene.addLine(0, gornja_linija_y, 12 * sirina_sata_dupla, gornja_linija_y,
-                               QPen(Qt.GlobalColor.black, 1.2))
-            self.scene.addLine(0, donja_linija_y, 12 * sirina_sata_dupla, donja_linija_y,
-                               QPen(Qt.GlobalColor.black, 1.2))
+        # 2. Glavne horizontalne linije puta turnusa - ograničene na zadati opseg
+        # Linija [3A/B] ili [5A/B] (gornja)
+        self.scene.addLine(pocetni_sat * sirina_sata, gornja_linija_y, krajnji_sat * sirina_sata, gornja_linija_y, QPen(Qt.GlobalColor.black, 1.2))
+        # Linija [3A/B] ili [5A/B] (donja)
+        self.scene.addLine(pocetni_sat * sirina_sata, donja_linija_y, krajnji_sat * sirina_sata, donja_linija_y, QPen(Qt.GlobalColor.black, 1.2))
+        
+        # 3. Vertikalne podelice na glavnim linijama puta - samo za zadati opseg
+        # Crtamo za sat pocetni_sat, pocetni_sat+1, ..., krajnji_sat (uključujući krajnji_sat za krajnju podelu)
+        for sat in range(pocetni_sat, krajnji_sat + 1): # pocetni_sat do krajnji_sat
+            x = sat * sirina_sata
+            # Kratka vertikalna podelica: dužina ~9px (≈3mm) na [3], ~9px (≈3mm) na [5]
+            self.scene.addLine(x, gornja_linija_y - 3, x, gornja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
+            self.scene.addLine(x, donja_linija_y - 3, x, donja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
+            
+            # Broj sata iznad gornje linije [0]
+            # sat_tekst = f"{sat % 24:02d}"  # ← OVO JE BILO ZA 0-24, ALI SADA CRTAMO SAMO DEO
+            # Za ovaj deo, broj sata je apsolutan (00, 01, ..., 12 ili 12, 13, ..., 24)
+            if sat < krajnji_sat: # Ne crtamo broj posle poslednje podelice (24:00 npr.)
+                 sat_tekst = f"{sat:02d}"
+                 text = self.scene.addText(sat_tekst)
+                 text.setFont(QFont("Arial", 8))
+                 # Centriraj tekst iznad podelice
+                 text_bbox = text.boundingRect()
+                 text.setPos(x - text_bbox.width() / 2, -30) # Ispod glavne vremenske ose (na y=0)
 
-            # Vertikalne podelice i brojevi sati (0-12)
-            # Crtamo za sat 0, 1, ..., 12 (uključujući 12 za krajnju podelu)
-            for sat in range(13):  # 0 do 12
-                x = sat * sirina_sata_dupla
-                # Kratka vertikalna podelica na gornjoj liniji [3A] i [5A] / [3B] i [5B]
-                self.scene.addLine(x, gornja_linija_y - 3, x, gornja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
-                # Kratka vertikalna podelica na donjoj liniji
-                self.scene.addLine(x, donja_linija_y - 3, x, donja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
-
-                # Broj sata iznad gornje linije (00 do 12)
-                if sat < 12 or oznaka == "A":  # Na gornjem redu, crtamo i 12. Na donjem, 12 se ne ponavlja na kraju.
-                    sat_tekst = f"{sat + (0 if oznaka == 'A' else 12):02d}"  # Za "A" 0-11, za "B" 12-23
-                    if sat == 12 and oznaka == "A":
-                        sat_tekst = "12"  # Specijalan slučaj za kraj gornjeg reda
-                    text = self.scene.addText(sat_tekst)
-                    text.setFont(QFont("Arial", 8))
-                    # Centriraj tekst iznad podelice
-                    text_bbox = text.boundingRect()
-                    text.setPos(x - text_bbox.width() / 2, gornja_linija_y - text_bbox.height() - 5)
-
-            # Broj vučnog vozila (1) - levo od linije
-            broj_vozila_y = gornja_linija_y - 5
-            self.scene.addText("1").setPos(10, broj_vozila_y)
-
-        # --- CRTAJ GORNJI RED (00:00 - 12:00) ---
-        if vozovi_pre_podne or vozovi_posle_podne:  # Uvek crtaj osu, čak i ako nema vozova u jednom redu
-            _crtaj_red_linije(y_gornji, "A")
-
-        # --- CRTAJ DONJI RED (12:00 - 24:00) ---
-        if vozovi_pre_podne or vozovi_posle_podne:  # Uvek crtaj osu
-            _crtaj_red_linije(y_donji, "B")
+        # 4. LINIJA SATA ([0A] ili [0B]) - UKLONJENA (po dogovoru)
+        # 5. VERTIKALNE LINIJE SATA - UKLONJENE (po dogovoru)
 
         # --- STILOVI LINIJA VOZNJI ---
         pen = QPen(Qt.GlobalColor.black, 2)
@@ -2290,100 +2359,178 @@ class SimpleApp(QWidget):
             'V': Qt.PenStyle.DashDotDotLine
         }
 
-        # --- CRTAJ VOZOVE ---
-        # Pomocna funkcija za crtanje jedne linije vožnje u određenom redu
-        def _crtaj_voz_u_redu(voz, y_base_red, sat_pocetak_opsega):
-            gornja_linija_y = y_base_red + 30
-            donja_linija_y = gornja_linija_y + 20
-            tekst_gore_y = gornja_linija_y - 25
-            tekst_dole_y = donja_linija_y + 10
-            linija_y = gornja_linija_y + 10  # Linija vožnje u sredini
-
-            # Izračunaj x koordinate u odnosu na dupli razmak i početak opsega
-            # Pretvori vreme u minute od početka opsega (npr. 10:30 postaje 10*60+30 = 630 minuta od 00:00)
-            # Za gornji red: 00:00 je početak, pa je 10:30 = 630 minuta od početka opsega 00:00
-            # Za donji red: 12:00 je početak, pa je 13:30 = 1*60+30 = 90 minuta od početka opsega 12:00
-            # x = (vreme u minutima od pocetka opsega) / 60 * sirina_sata_dupla
+        # --- GLAVNA PETLJA: OBRADI SVE VOZOVE I NACRTAJ IH SEGMENTE ---
+        for i, voz in enumerate(vozovi):
+            # 1. Izračunaj x koordinate za polazak i dolazak u odnosu na ceo dan (0-24)
+            # Pretvori vreme u minute od ponoći (00:00)
             sat_p, min_p = voz["polazak"]
             sat_d, min_d = voz["dolazak"]
+            minuti_p = sat_p * 60 + min_p
+            minuti_d = sat_d * 60 + min_d
 
-            # Vreme u minutima od početka dana (00:00)
-            minuti_od_nula = sat_p * 60 + min_p
-            minuti_d_od_nula = sat_d * 60 + min_d
+            # 2. Proveri da li je voz prelazni (dolazak raniji od polaska u 24h ciklusu)
+            # Prelazni: sat_d < sat_p ILI (sat_d == sat_p i min_d < min_p)
+            # Ali ovo može da bude zbunjujuće. Bolje je reći:
+            # Ako je minuti_d < minuti_p, onda je voz prelazni (dolazi sledećeg dana).
+            # Ali ako voz polazi u 23:00 i stiže u 02:15, to znači da minuti_p=1380, minuti_d=135.
+            # minuti_d (135) < minuti_p (1380) -> TRUE -> Prelazni.
+            # Ako voz polazi u 11:00 i stiže u 13:15, to znači minuti_p=660, minuti_d=795.
+            # minuti_d (795) < minuti_p (660) -> FALSE -> Nije prelazni.
+            # Ovo je tačno.
+            prelazni = minuti_d < minuti_p
 
-            # Korekcija za prelazne vožnje (dolazak < polazak u istom 24h ciklusu)
-            # Ako je dolazak raniji od polaska, znači da dolazi sledećeg dana
-            # Prelazna vožnja: sat_d < sat_p ILI (sat_d == sat_p i min_d < min_p)
-            prelazna = (sat_d < sat_p) or (sat_d == sat_p and min_d < min_p)
-            # Ako je prelazna, dolazak je u narednom danu
-            if prelazna:
-                minuti_d_od_nula += 24 * 60  # Dodaj 24h u minutima
+            # 3. Ako je prelazni, dodaj 24h (1440 minuta) na vreme dolaska za proračune
+            if prelazni:
+                minuti_d_korigovano = minuti_d + 24 * 60
+            else:
+                minuti_d_korigovano = minuti_d
 
-            # Pretvori u x koordinate za prikaz (dupli razmak)
-            # x = (minuti - pocetak_opsega_u_minutima) / 60 * sirina_sata_dupla
-            if sat_pocetak_opsega == 0:  # Gornji red (00:00 - 12:00)
-                minuti_pocetak_opsega = 0
-                minuti_kraj_opsega = 12 * 60  # 720 minuta
-            else:  # Donji red (12:00 - 24:00)
-                minuti_pocetak_opsega = 12 * 60  # 720 minuta
-                minuti_kraj_opsega = 24 * 60  # 1440 minuta
+            # 4. Odredi u kom/redovima se voz pojavljuje i nacrtaj segmente
+            # Postoje tri mogućnosti:
+            # a) Voz je u potpunosti u gornjem redu (polazak < 12:00 i dolazak <= 12:00)
+            # b) Voz je u potpunosti u donjem redu (polazak >= 12:00 i dolazak > 12:00)
+            # c) Voz prelazi granicu (deo u jednom, deo u drugom redu)
+            #    - c1) Obični prelaz (11:00 -> 13:15): deo u gornjem (11:00-12:00), deo u donjem (12:00-13:15)
+            #    - c2) Prelazni voz (23:00 -> 02:15): deo u donjem (23:00-24:00), deo u gornjem (00:00-02:15)
 
-            # Provera da li voz uopšte pripada ovom opsegu (bar deo)
-            if minuti_od_nula >= minuti_kraj_opsega or minuti_d_od_nula <= minuti_pocetak_opsega:
-                # Voz je potpuno van opsega, ne crtaj ništa
-                return
+            # Opsezi u minutima:
+            # Gornji red: 0 - 720 min (00:00 - 12:00)
+            # Donji red: 720 - 1440 min (12:00 - 24:00)
 
-            # Odseci liniju na granice opsega
-            clipped_min_p = max(minuti_od_nula, minuti_pocetak_opsega)
-            clipped_min_d = min(minuti_d_od_nula, minuti_kraj_opsega)
+            if not prelazni:
+                # --- SLUČAJ 1: Običan voz (ne prelazi ponoć) ---
+                if minuti_d <= 720:
+                    # a) U potpunosti u gornjem redu
+                    x_p_cr = (minuti_p / 60.0) * sirina_sata
+                    x_d_cr = (minuti_d / 60.0) * sirina_sata
+                    self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "gornji", minuti_p, minuti_d)
 
-            # Pretvori odsečene minute u x koordinate za prikaz
-            x_p_clipped = ((clipped_min_p - minuti_pocetak_opsega) / 60.0) * sirina_sata_dupla
-            x_d_clipped = ((clipped_min_d - minuti_pocetak_opsega) / 60.0) * sirina_sata_dupla
+                elif minuti_p >= 720:
+                    # b) U potpunosti u donjem redu
+                    # Potrebno je da se x koordinate računaju u odnosu na početak donjeg reda (12:00)
+                    # Dakle, oduzimamo 720 minuta (12 sati) od apsolutnog vremena
+                    x_p_cr = ((minuti_p - 720) / 60.0) * sirina_sata
+                    x_d_cr = ((minuti_d - 720) / 60.0) * sirina_sata
+                    self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "donji", minuti_p, minuti_d)
 
-            # Postavi stil linije
-            pen.setStyle(style_map.get(voz['status'], Qt.PenStyle.SolidLine))
+                else:
+                    # c1) Prelazi granicu unutar istog dana (11:00 -> 13:15)
+                    # Prvi segment: od polaska do 12:00
+                    x_p_cr = (minuti_p / 60.0) * sirina_sata
+                    x_d_cr = (720 / 60.0) * sirina_sata # 12:00
+                    self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "gornji_segment1", minuti_p, 720)
 
-            # Nacrtaj liniju vožnje (samo deo unutar opsega)
-            self.scene.addLine(x_p_clipped, linija_y, x_d_clipped, linija_y, pen)
+                    # Drugi segment: od 12:00 do dolaska
+                    x_p_cr = 0 # 12:00 u donjem redu
+                    x_d_cr = ((minuti_d - 720) / 60.0) * sirina_sata
+                    self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "donji_segment2", 720, minuti_d)
 
-            # Broj voza (centrirano između x_p i x_d unutar opsega)
+            else:
+                # --- SLUČAJ 2: Prelazni voz (prelazi ponoć) ---
+                # Prelazni voz pripada donjem redu jer mu je *polazak* u opsegu 12:00-24:00
+                # (osim ako polazi u 00:xx, ali to je specijalan slučaj koji ćemo za sada ignosisati jer je retko).
+                # Ako polazi u 23:00, to je 1380 min > 720 min. Pripada donjem redu.
+                # Njegov dolazak je 1575 min. 1575 > 1440, znači ide i u gornji red sledećeg dana.
+
+                # Prvi segment: od polaska do 24:00 (kraj donjeg reda)
+                # x_p_cr se računa u odnosu na početak donjeg reda (12:00)
+                x_p_cr = ((minuti_p - 720) / 60.0) * sirina_sata
+                x_d_cr = ((1440 - 720) / 60.0) * sirina_sata # 24:00 u odnosu na 12:00 = 12:00 * sirina_sata
+                self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "donji_segment1_prelazni", minuti_p, 1440)
+
+                # Drugi segment: od 00:00 do dolaska (u gornjem redu)
+                # x_p_cr je 0 (00:00)
+                x_p_cr = 0
+                # x_d_cr se računa u odnosu na početak gornjeg reda (00:00)
+                x_d_cr = (minuti_d / 60.0) * sirina_sata
+                self._crtaj_segment_voznje(voz, x_p_cr, x_d_cr, y, sirina_sata, "gornji_segment2_prelazni", 1440, minuti_d_korigovano)
+
+
+    def _crtaj_segment_voznje(self, voz, x1_cr, x2_cr, y_base_red, sirina_sata, tip_segmenta, minuti_abs_p, minuti_abs_d):
+        """
+        Pomoćna funkcija za crtanje jednog segmenta linije vožnje.
+        x1_cr, x2_cr: x koordinate segmenta (već transformisane u dupli razmak).
+        y_base_red: y koordinata gornje ivice celog reda.
+        tip_segmenta: String koji označava tip segmenta ("gornji", "donji", "gornji_segment1", "donji_segment2", itd.)
+        minuti_abs_p, minuti_abs_d: Apsolutno vreme polaska/dolaska segmenta u minutima od ponoći dana 1.
+        """
+        gornja_linija_y = y_base_red + 30
+        donja_linija_y = gornja_linija_y + 20
+        tekst_gore_y = gornja_linija_y - 25
+        tekst_dole_y = donja_linija_y + 10
+        linija_y = gornja_linija_y + 10 # Linija vožnje u sredini
+
+        # Stil linije
+        pen = QPen(Qt.GlobalColor.black, 2)
+        style_map = {
+            'R': Qt.PenStyle.SolidLine,
+            'L': Qt.PenStyle.DashLine,
+            'RE': Qt.PenStyle.DotLine,
+            'S': Qt.PenStyle.DashDotLine,
+            'V': Qt.PenStyle.DashDotDotLine
+        }
+        pen.setStyle(style_map.get(voz['status'], Qt.PenStyle.SolidLine))
+
+        # 1. Nacrtaj liniju vožnje (samo deo unutar opsega)
+        self.scene.addLine(x1_cr, linija_y, x2_cr, linija_y, pen)
+
+        # 2. Broj voza - crtaj samo jednom za ceo voz, ne za svaki segment
+        # Proverićemo da li je ovo prvi segment ovog voza
+        # Na primer, za voz 11:00-13:15:
+        # Segment 1 (11:00-12:00) ima tip_segmenta "gornji_segment1". Treba nacrtati broj voza.
+        # Segment 2 (12:00-13:15) ima tip_segmenta "donji_segment2". Ne treba crtati broj voza.
+        # Za voz 23:00-02:15:
+        # Segment 1 (23:00-24:00) ima tip_segmenta "donji_segment1_prelazni". Treba nacrtati broj voza.
+        # Segment 2 (00:00-02:15) ima tip_segmenta "gornji_segment2_prelazni". Ne treba crtati broj voza.
+        if "segment1" in tip_segmenta or tip_segmenta in ["gornji", "donji"]:
             text_broj = self.scene.addText(voz['broj'])
-            text_broj.setPos((x_p_clipped + x_d_clipped) / 2 - 20, tekst_gore_y)
+            font_broj = QFont()
+            font_broj.setBold(True) # Boldiran
+            text_broj.setFont(font_broj)
+            text_broj.setPos((x1_cr + x2_cr) / 2 - 20, tekst_gore_y)
 
-            # Minuti (pored x_p i x_d, ali samo ako su unutar opsega)
-            # Provera da li je tačka polaska unutar opsega za crtanje minuta
-            if minuti_pocetak_opsega <= minuti_od_nula < minuti_kraj_opsega:
-                text_min_p = self.scene.addText(f"{min_p:02d}")  # minuti
-                text_min_p.setPos(x_p_clipped - 10, tekst_dole_y)
-            # Provera da li je tačka dolaska unutar opsega za crtanje minuta
-            if minuti_pocetak_opsega < minuti_d_od_nula <= minuti_kraj_opsega:  # < na početku, <= na kraju
-                text_min_d = self.scene.addText(f"{min_d:02d}")  # minuti
-                text_min_d.setPos(x_d_clipped - 10, tekst_dole_y)
+        # 3. Minuti - crtaj na početku i kraju svakog segmenta
+        sat_p_seg, min_p_seg = divmod(minuti_abs_p, 60)
+        sat_d_seg, min_d_seg = divmod(minuti_abs_d, 60)
 
-            # Stanice (samo za prvi i poslednji voz u CELOM prikazu)
-            # Ovo je komplikovanije jer se crtaju u dva odvojena crtanja.
-            # Najbolje je crtati stanice odvojeno, ili prepoznati prvi/poslednji globalno.
-            # Za sada, možemo crtati stanice za svaki voz ako je unutar opsega.
-            # Ako je voz prvi u svom delu (pre ili posle podne) i početak mu je u opsegu, nacrtaj stanicu
-            # Ako je voz poslednji u svom delu i kraj mu je u opsegu, nacrtaj stanicu
-            # Ovo može da dovede do dupliranja ako voz prelazi granicu, ali za sada je dovoljno jednostavno.
+        # Minut polaska segmenta
+        text_min_p = self.scene.addText(f"{min_p_seg:02d}")
+        text_min_p.setPos(x1_cr - 10, tekst_dole_y)
+
+        # Minut dolaska segmenta
+        text_min_d = self.scene.addText(f"{min_d_seg:02d}")
+        text_min_d.setPos(x2_cr - 10, tekst_dole_y)
+
+        # 4. Stanice - crtaj na početku i kraju svakog segmenta
+        # Ovo je uprošćeno. Za tačno crtanje stanica na krajevima celog turnusa,
+        # potreban je dodatni kontekst (da li je voz prvi/poslednji u turnusu). Ovde ih ne možemo lako odrediti
+        # jer funkcija ne zna redosled vozova u celom turnusu.
+        # Zbog toga, za sada ćemo crtati stanice za svaki segment.
+        # Ako je segment "gornji_segment1" ili "donji_segment1_prelazni", crtaj početnu stanicu
+        if "segment1" in tip_segmenta or tip_segmenta in ["gornji_segment1_prelazni", "donji_segment1_prelazni"]:
+            text_pocetna = self.scene.addText(voz['pocetna'])
+            font_stanica = QFont()
+            # font_stanica.setBold(True) # NE BOLDIRATI
+            text_pocetna.setFont(font_stanica)
+            text_pocetna.setPos(x1_cr - 20, tekst_gore_y - 15)
+
+        # Ako je segment "donji_segment2" ili "gornji_segment2_prelazni", crtaj krajnju stanicu
+        if "segment2" in tip_segmenta or tip_segmenta in ["donji_segment2", "gornji_segment2_prelazni"]:
+            text_krajnja = self.scene.addText(voz['krajnja'])
+            font_stanica = QFont()
+            # font_stanica.setBold(True) # NE BOLDIRATI
+            text_krajnja.setFont(font_stanica)
+            text_krajnja.setPos(x2_cr - 20, tekst_gore_y - 15)
+        else:
+            # Ako je običan segment (gornji, donji) i nije segment1/segment2, crtaj srednju stanicu
+            # Ovo je heuristika i može biti neprecizno.
             # Bolje rešenje bi bilo da se ova logika prebaci u glavnu funkciju koja zna ko je prvi/poslednji globalno.
-            # Zbog jednostavnosti, ostavićemo ovako za sada, uz napomenu da može biti grešaka za vozove koji prelaze ponoć.
-
-        # --- CRTAJ VOZOVE U GORNJEM REDU (00:00 - 12:00) ---
-        for voz in vozovi_pre_podne:
-            _crtaj_voz_u_redu(voz, y_gornji, 0)  # sat_pocetak_opsega = 0
-
-        # --- CRTAJ VOZOVE U DONJEM REDU (12:00 - 24:00) ---
-        for voz in vozovi_posle_podne:
-            _crtaj_voz_u_redu(voz, y_donji, 12)  # sat_pocetak_opsega = 12
-
-        # --- DODATNO: CRTANJE STANICA GLOBALNO (OPCIONO) ---
-        # Ova logika može da se doda kasnije ako se pokaže potreba za tačnim crtanjem
-        # početnih i krajnjih stanica na spoju dva reda.
-        # Na primer, ako voz iz prvog reda završava u 11:50, a voz iz drugog počinje u 12:10,
-        # može se nacrtati stanica "PO" između dva reda.
+            # Za sada, ostavićemo crtane stanice bez dodatne logike, jer je kompleksnije rešenje
+            # zahtevalo bi promenu u `prikazi_prosireni_turnus` da prošalje sortirane vozove
+            # i da odredi koji je prvi/poslednji globalno.
+            # Na primer, ako voz iz prvog reda završava u 11:50, a voz iz drugog počinje u 12:10,
+            # može se nacrtati stanica "PO" između dva reda.
+            pass
 
 
 # --- POKRETANJE APLIKACIJE ---
