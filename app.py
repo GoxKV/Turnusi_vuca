@@ -1961,12 +1961,13 @@ class SimpleApp(QWidget):
         donja_linija_y = gornja_linija_y + 20  # Razmak ~20px ≈ 5mm
         tekst_gore_y = gornja_linija_y - 25
         tekst_dole_y = donja_linija_y + 10
-        broj_vozila_x = 10
-        broj_vozila_y = gornja_linija_y - 5  # Vertikalno centriran sa putem voza
+        # Promenjena pozicija za "Broj vučnog vozila"
+        broj_vozila_x = -30  # Malo levo od početka scene (0) - ≈2mm (6px) levo
+        broj_vozila_y = gornja_linija_y + 10 - 7.5  # Centriran sa putem voza (gornja_linija_y + visina_reda/2 - visina_teksta/2)
 
         # --- CRTANJE ELEMENTA TURNUSA ---
 
-        # 1. Broj vučnog vozila (1) - levo od svih linija, boldiran, centriran sa putem voza
+        # 1. Broj vučnog vozila (1) - ISPRED svih linija, boldiran, centriran sa putem voza
         text_broj_vozila = self.scene.addText("1")
         font_broj_vozila = QFont()
         font_broj_vozila.setBold(True)
@@ -1986,22 +1987,22 @@ class SimpleApp(QWidget):
 
         # 3. Vertikalne podelice na glavnim linijama puta - na svakih sat vremena (0-24)
         # Crtamo za sat 0, 1, ..., 24 (uključujući 24 za krajnju podelu)
-        for sat in range(25):  # 0 do 24
-            x = sat * sirina_sata
+        for h in range(25):  # 0 do 24
+            x = h * sirina_sata
             # Kratka vertikalna podelica: dužina ~9px (≈3mm) na gornjoj liniji [3A/B] i [5A/B]
             self.scene.addLine(x, gornja_linija_y - 3, x, gornja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
             # Kratka vertikalna podelica: dužina ~9px (≈3mm) na donjoj liniji [3A/B] i [5A/B]
             self.scene.addLine(x, donja_linija_y - 3, x, donja_linija_y + 3, QPen(Qt.GlobalColor.black, 0.8))
 
-            # Broj sata iznad gornje linije [0A/B]
-            # sat_tekst = f"{sat % 24:02d}"  # ← OVO SE MENJA
-            sat_tekst = f"{sat:02d}"  # ← NOVA LINIJA: prikazuje 00, 01, ..., 23, 24
-            text = self.scene.addText(sat_tekst)
+            # Broj sata iznad gornje linije [0A/B] DUPLO
+            # sat_tekst = f"{h % 24:02d}"  # ← OVO SE MENJA
+            # sat_tekst = f"{h:02d}"  # ← NOVA LINIJA: prikazuje 00, 01, ..., 23, 24
+            # text = self.scene.addText(sat_tekst)
             font_sat = QFont("Arial", 8)
             # text.setFont(font_sat) # Postavi font
             # Centriraj tekst iznad podelice
-            rect_sat = text.boundingRect()
-            text.setPos(x - rect_sat.width() / 2, -30)  # Ispod glavne vremenske ose (na y=0)
+            # rect_sat = text.boundingRect()
+            # text.setPos(x - rect_sat.width() / 2, -30)  # Ispod glavne vremenske ose (na y=0)
 
         # --- STILOVI LINIJA VOZNJI ---
         pen = QPen(Qt.GlobalColor.black, 2)
@@ -2125,51 +2126,52 @@ class SimpleApp(QWidget):
                     font_stanica = QFont()
                     # font_stanica.setBold(True) # NE BOLDIRATI
                     text_pocetna.setFont(font_stanica)
-                    # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
-                    text_pocetna.setPos(x_p - 20, tekst_gore_y - 15 - 10)
-                # Krajnja stanica PRVOG VOZA se crta na polovini između njegovog dolaska i polaska sledećeg
-                if i < len(vozovi) - 1: # Ako postoji sledeći voz
-                    sledeci = vozovi[i + 1]
-                    sat_p_sledeci, min_p_sledeci = sledeci["polazak"]
-                    minuti_p_sledeci = sat_p_sledeci * 60 + min_p_sledeci
-                    x_p_sledeci = (minuti_p_sledeci / 60.0) * sirina_sata
+                    # PORAVNAJ DESNO SA LEVOM IVICOM LINIJE VOZA
+                    rect_pocetna = text_pocetna.boundingRect()
+                    text_pocetna.setPos(x_p - rect_pocetna.width(),
+                                        tekst_gore_y - 15)  # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                if opseg_x_pocetak <= x_d <= opseg_x_kraj:
+                    text_krajnja = self.scene.addText(voz['krajnja'])
+                    font_stanica = QFont()
+                    # font_stanica.setBold(True) # NE BOLDIRATI
+                    text_krajnja.setFont(font_stanica)
+                    # Centriraj tekst iznad podelice
+                    rect_krajnja = text_krajnja.boundingRect()
                     # x_sredina je tačka između dolaska trenutnog i polaska sledećeg
-                    x_sredina = (x_d + x_p_sledeci) / 2
-                    if opseg_x_pocetak <= x_sredina <= opseg_x_kraj:
-                         text_krajnja = self.scene.addText(voz['krajnja'])
-                         font_stanica = QFont()
-                         # font_stanica.setBold(True) # NE BOLDIRATI
-                         text_krajnja.setFont(font_stanica)
-                         # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
-                         text_krajnja.setPos(x_sredina - 20, tekst_gore_y - 15 - 10)
+                    if i < len(vozovi) - 1:
+                        sledeci = vozovi[i + 1]
+                        sat_p_sledeci, min_p_sledeci = sledeci["polazak"]
+                        minuti_p_sledeci = sat_p_sledeci * 60 + min_p_sledeci
+                        x_p_sledeci = (minuti_p_sledeci / 60.0) * sirina_sata
+                        x_sredina = (x_d + x_p_sledeci) / 2
+                        text_krajnja.setPos(x_sredina - rect_krajnja.width() / 2,
+                                            tekst_gore_y - 15)  # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                    else:
+                        # Poslednji voz u turnusu - PORAVNAJ LEVO SA DESNOM IVICOM LINIJE VOZA
+                        text_krajnja.setPos(x_d,
+                                            tekst_gore_y - 15)  # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
             else:  # Svi ostali vozovi (uključujući prelazni na kraju)
                 # Crtaj SAMO krajnja stanica (jer je to pocetna stanica sledeceg)
-                # Krajnja stanica se crta na polovini između dolaska trenutnog i polaska sledećeg
-                # Ako je trenutni voz poslednji, krajnja stanica se crta desno od kraja linije (x_d)
-                if i == len(vozovi) - 1: # Poslednji voz u turnusu
-                     if opseg_x_pocetak <= x_d <= opseg_x_kraj:
-                          text_krajnja = self.scene.addText(voz['krajnja'])
-                          font_stanica = QFont()
-                          # font_stanica.setBold(True) # NE BOLDIRATI
-                          text_krajnja.setFont(font_stanica)
-                          # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
-                          # PORAVNAJ DESNO SA KRAJEM LINIJE
-                          text_krajnja.setPos(x_d, tekst_gore_y - 15 - 10)
-                else: # Srednji vozovi (između prvog i poslednjeg)
-                     if i < len(vozovi) - 1:
-                          sledeci = vozovi[i + 1]
-                          sat_p_sledeci, min_p_sledeci = sledeci["polazak"]
-                          minuti_p_sledeci = sat_p_sledeci * 60 + min_p_sledeci
-                          x_p_sledeci = (minuti_p_sledeci / 60.0) * sirina_sata
-                          # x_sredina je tačka između dolaska trenutnog i polaska sledećeg
-                          x_sredina = (x_d + x_p_sledeci) / 2
-                          if opseg_x_pocetak <= x_sredina <= opseg_x_kraj:
-                               text_krajnja = self.scene.addText(voz['krajnja'])
-                               font_stanica = QFont()
-                               # font_stanica.setBold(True) # NE BOLDIRATI
-                               text_krajnja.setFont(font_stanica)
-                               # Podigni tekst naviše za ~3mm (≈11.34px, zaokružimo na 10px)
-                               text_krajnja.setPos(x_sredina - 20, tekst_gore_y - 15 - 10)
+                if opseg_x_pocetak <= x_d <= opseg_x_kraj:
+                    text_krajnja = self.scene.addText(voz['krajnja'])
+                    font_stanica = QFont()
+                    # font_stanica.setBold(True) # NE BOLDIRATI
+                    text_krajnja.setFont(font_stanica)
+                    # Centriraj tekst iznad podelice
+                    rect_krajnja = text_krajnja.boundingRect()
+                    # x_sredina je tačka između dolaska trenutnog i polaska sledećeg
+                    if i < len(vozovi) - 1:
+                        sledeci = vozovi[i + 1]
+                        sat_p_sledeci, min_p_sledeci = sledeci["polazak"]
+                        minuti_p_sledeci = sat_p_sledeci * 60 + min_p_sledeci
+                        x_p_sledeci = (minuti_p_sledeci / 60.0) * sirina_sata
+                        x_sredina = (x_d + x_p_sledeci) / 2
+                        text_krajnja.setPos(x_sredina - rect_krajnja.width() / 2,
+                                            tekst_gore_y - 15)  # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
+                    else:
+                        # Poslednji voz u turnusu - PORAVNAJ LEVO SA DESNOM IVICOM LINIJE VOZA
+                        text_krajnja.setPos(x_d,
+                                            tekst_gore_y - 15)  # Podignuti naviše za ~3mm (≈11.34px, zaokružimo na 10px)
 
     # --- OPERACIJE SA TURNUSIMA ZA ŠTAMPANJE ---
 
